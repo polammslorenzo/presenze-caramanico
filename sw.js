@@ -8,7 +8,7 @@
    (v1 -> v2). È l'unico modo perché i telefoni già installati
    scarichino la versione nuova. */
 
-const CACHE = "caramanico-v1";
+const CACHE = "caramanico-v2";
 
 const RISORSE = [
   "./",

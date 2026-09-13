@@ -170,16 +170,21 @@ button,input,select{font:inherit; color:inherit}
   touch-action:none; cursor:grab;
 }
 .scena.trascina{cursor:grabbing}
-.tela{position:absolute; inset:8px; transform-origin:0 0; will-change:transform}
+.tela{position:absolute; inset:8px}
 .tela svg{width:100%; height:100%; display:block}
 .cella rect{fill:var(--cella); stroke:var(--cella-bordo); stroke-width:2.4; vector-effect:non-scaling-stroke}
-.cella .num{fill:var(--cella-num); font-size:15px; font-weight:500; font-variant-numeric:tabular-nums; pointer-events:none}
-.cella .sig{font-size:34px; font-weight:700; text-anchor:middle; dominant-baseline:central; pointer-events:none; opacity:0}
+.cella .num{
+  fill:var(--cella-num); font-size:21px; font-weight:700;
+  font-variant-numeric:tabular-nums; pointer-events:none;
+  paint-order:stroke fill; stroke:var(--cella); stroke-width:3.2; stroke-linejoin:round;
+}
+.cella .sig{font-size:30px; font-weight:700; text-anchor:middle; dominant-baseline:central; pointer-events:none; opacity:0}
 .cella[data-v="P"] rect{fill:var(--p-bg); stroke:var(--navy)}
 .cella[data-v="P"] .sig{fill:var(--p-ink); opacity:1}
+.cella[data-v="P"] .num{stroke:var(--p-bg)}
 .cella[data-v="S"] rect{fill:var(--s-bg); stroke:var(--s-bg)}
 .cella[data-v="S"] .sig{fill:var(--s-ink); opacity:1}
-.cella[data-v="S"] .num{fill:var(--s-ink); opacity:.72}
+.cella[data-v="S"] .num{fill:var(--s-ink); opacity:.85; stroke:var(--s-bg)}
 .cella.trovata rect{stroke:var(--rosso); stroke-width:5}
 
 .zoom{position:absolute; right:12px; bottom:12px; display:flex; flex-direction:column; gap:6px}
@@ -726,12 +731,12 @@ function costruisci(){
       gr.appendChild(r);
       var t = document.createElementNS(NS,"text");
       t.setAttribute("class","num");
-      t.setAttribute("x", x+4); t.setAttribute("y", y+16);
+      t.setAttribute("x", x+5); t.setAttribute("y", y+21);
       t.textContent = n;
       gr.appendChild(t);
       var s = document.createElementNS(NS,"text");
       s.setAttribute("class","sig");
-      s.setAttribute("x", x+w/2); s.setAttribute("y", y+h/2+2);
+      s.setAttribute("x", x+w/2); s.setAttribute("y", y+h*0.68);
       gr.appendChild(s);
       celle[n] = {g:gr, sig:s, pag:i};
       g.appendChild(gr);
@@ -777,25 +782,48 @@ function vaiPagina(i){
 }
 
 /* ---------------- pan / zoom ---------------- */
-var k=1, tx=0, ty=0;
-function trasforma(){ document.getElementById("tela").style.transform = "translate("+tx+"px,"+ty+"px) scale("+k+")"; }
-function adatta(){ k=1; tx=0; ty=0; trasforma(); }
-function zoomA(nuovo, cx, cy){
-  var sc = document.getElementById("scena").getBoundingClientRect();
-  cx = (cx===undefined ? sc.width/2 : cx - sc.left);
-  cy = (cy===undefined ? sc.height/2 : cy - sc.top);
-  nuovo = Math.max(1, Math.min(10, nuovo));
-  var f = nuovo / k;
-  tx = cx - (cx - tx) * f;
-  ty = cy - (cy - ty) * f;
-  k = nuovo;
-  limita(); trasforma();
+/* Lo zoom agisce sul viewBox dell'SVG, non su una scala CSS: il browser
+   ridisegna il vettoriale a ogni livello, quindi i numeri restano nitidi. */
+var ZMAX = 20;
+var k=1, vx=0, vy=0;
+function misura(){
+  var b = PLAN.pages[pagina].vb;
+  var r = svgs[pagina].getBoundingClientRect();
+  var vw = b[2]/k, vh = b[3]/k;
+  var s = (r.width > 0 && r.height > 0) ? Math.min(r.width/vw, r.height/vh) : 0;
+  return {b:b, r:r, vw:vw, vh:vh, s:s,
+          ox:(r.width - s*vw)/2, oy:(r.height - s*vh)/2};
+}
+function trasforma(){
+  var m = misura();
+  svgs[pagina].setAttribute("viewBox", vx+" "+vy+" "+m.vw+" "+m.vh);
 }
 function limita(){
-  var sc = document.getElementById("scena").getBoundingClientRect();
-  var minX = sc.width - sc.width*k, minY = sc.height - sc.height*k;
-  tx = Math.min(0, Math.max(minX, tx));
-  ty = Math.min(0, Math.max(minY, ty));
+  var m = misura(), b = m.b;
+  vx = m.vw >= b[2] ? b[0] + (b[2]-m.vw)/2 : Math.min(b[0]+b[2]-m.vw, Math.max(b[0], vx));
+  vy = m.vh >= b[3] ? b[1] + (b[3]-m.vh)/2 : Math.min(b[1]+b[3]-m.vh, Math.max(b[1], vy));
+}
+function adatta(){
+  var b = PLAN.pages[pagina].vb;
+  k=1; vx=b[0]; vy=b[1]; limita(); trasforma();
+}
+function zoomA(nuovo, cx, cy){
+  var m = misura();
+  if(!m.s){ return; }
+  cx = (cx===undefined ? m.r.width/2 : cx - m.r.left);
+  cy = (cy===undefined ? m.r.height/2 : cy - m.r.top);
+  var u = vx + (cx - m.ox)/m.s, v = vy + (cy - m.oy)/m.s;
+  k = Math.max(1, Math.min(ZMAX, nuovo));
+  var n = misura();
+  if(n.s){ vx = u - (cx - n.ox)/n.s; vy = v - (cy - n.oy)/n.s; }
+  limita(); trasforma();
+}
+/* porta al centro dello schermo un punto dato in unita' del disegno */
+function centraSu(u, v, zoom){
+  k = Math.max(1, Math.min(ZMAX, zoom));
+  var m = misura();
+  vx = u - m.vw/2; vy = v - m.vh/2;
+  limita(); trasforma();
 }
 
 var punti = {}, partenza = null, mosso = false, t0 = 0;
@@ -805,14 +833,14 @@ scena.addEventListener("pointerdown", function(e){
   scena.setPointerCapture(e.pointerId);
   punti[e.pointerId] = {x:e.clientX, y:e.clientY};
   var n = Object.keys(punti).length;
-  if(n === 1){ partenza = {x:e.clientX, y:e.clientY, tx:tx, ty:ty}; mosso = false; t0 = Date.now(); }
+  if(n === 1){ partenza = {x:e.clientX, y:e.clientY, vx:vx, vy:vy, s:misura().s}; mosso = false; t0 = Date.now(); }
   else if(n === 2){ partenza = pinch(); }
   scena.classList.add("trascina");
 });
 function pinch(){
   var ids = Object.keys(punti);
   var a = punti[ids[0]], b = punti[ids[1]];
-  return {d: Math.hypot(a.x-b.x, a.y-b.y), cx:(a.x+b.x)/2, cy:(a.y+b.y)/2, k:k, tx:tx, ty:ty};
+  return {d: Math.hypot(a.x-b.x, a.y-b.y), cx:(a.x+b.x)/2, cy:(a.y+b.y)/2, k:k};
 }
 scena.addEventListener("pointermove", function(e){
   if(!punti[e.pointerId]) return;
@@ -821,8 +849,10 @@ scena.addEventListener("pointermove", function(e){
   if(ids.length === 1 && partenza){
     var dx = e.clientX - partenza.x, dy = e.clientY - partenza.y;
     if(Math.abs(dx) > 6 || Math.abs(dy) > 6) mosso = true;
-    tx = partenza.tx + dx; ty = partenza.ty + dy;
-    limita(); trasforma();
+    if(partenza.s){
+      vx = partenza.vx - dx/partenza.s; vy = partenza.vy - dy/partenza.s;
+      limita(); trasforma();
+    }
   } else if(ids.length === 2 && partenza && partenza.d){
     var p = pinch();
     zoomA(partenza.k * (p.d / partenza.d), p.cx, p.cy);
@@ -855,6 +885,13 @@ document.getElementById("zIn").onclick = function(){ zoomA(k*1.4); };
 document.getElementById("zOut").onclick = function(){ zoomA(k/1.4); };
 document.getElementById("zFit").onclick = adatta;
 
+/* la rotazione del telefono cambia il rapporto della scena: ricalcola */
+var attesaMisura = null;
+window.addEventListener("resize", function(){
+  clearTimeout(attesaMisura);
+  attesaMisura = setTimeout(function(){ limita(); trasforma(); }, 120);
+});
+
 /* ---------------- cerca posteggio ---------------- */
 var lampo = null;
 document.getElementById("vai").addEventListener("input", function(e){
@@ -864,14 +901,13 @@ document.getElementById("vai").addEventListener("input", function(e){
   var c = celle[n];
   if(c.pag !== pagina) vaiPagina(c.pag);
   requestAnimationFrame(function(){
-    var sc = scena.getBoundingClientRect();
-    var r = c.g.getBoundingClientRect();
-    var obiettivo = 4;
-    var f = obiettivo / k;
-    var cx = r.left + r.width/2 - sc.left, cy = r.top + r.height/2 - sc.top;
-    tx = sc.width/2 - (cx - tx) * f;
-    ty = sc.height/2 - (cy - ty) * f;
-    k = obiettivo; limita(); trasforma();
+    var m = misura();
+    if(m.s){
+      var r = c.g.getBoundingClientRect();
+      var u = vx + (r.left + r.width/2 - m.r.left - m.ox)/m.s;
+      var v = vy + (r.top + r.height/2 - m.r.top - m.oy)/m.s;
+      centraSu(u, v, 5);
+    }
     c.g.classList.add("trovata"); lampo = c.g;
   });
 });
