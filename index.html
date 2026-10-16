@@ -1086,6 +1086,20 @@ function costruisciPdf(){
       }
     });
   });
+  /* Rilevamento in forma esatta nei metadati del PDF: una lettera per
+     posteggio dal n.1 al n.557 (P presente, S spuntista, L libero).
+     Serve al registro dei posteggi per caricare il giro senza dover
+     interpretare la planimetria. Non si vede e non si stampa. */
+  var codice = "";
+  for(var n = 1; n <= 557; n++){
+    var v = stato[n];
+    codice += (v === "P" ? "P" : v === "S" ? "S" : "L");
+  }
+  doc.setProperties({
+    title: "Rilevamento presenze Mercato Caramanico",
+    subject: "U.O. San Lorenzo - Polizia Municipale di Napoli",
+    keywords: "CARPRES1|" + (val("fData") || "") + "|" + codice
+  });
   return doc.output("blob");
 }
 
