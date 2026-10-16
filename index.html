@@ -1086,14 +1086,117 @@ function costruisciPdf(){
       }
     });
   });
+  /* ---------------- pagina di riepilogo ---------------- */
+  var presenti = [], spuntisti = [];
+  for(var n = 1; n <= 557; n++){
+    var v = stato[n];
+    if(v === "P") presenti.push(n);
+    else if(v === "S") spuntisti.push(n);
+  }
+  var liberi = 557 - presenti.length - spuntisti.length;
+
+  doc.addPage([PW, PH], "landscape");
+  var ry = 26;
+  try{
+    if(LOGHI.pm) doc.addImage(LOGHI.pm, "PNG", M, M*0.6, 44, 40);
+    if(LOGHI.comune) doc.addImage(LOGHI.comune, "PNG", PW-M-42, M*0.6, 42, 40);
+  }catch(e){}
+  doc.setTextColor(10,77,166);
+  doc.setFont("helvetica","bold"); doc.setFontSize(7.6);
+  doc.text("C O M U N E   D I   N A P O L I   ·   P O L I Z I A   M U N I C I P A L E", PW/2, ry, {align:"center"});
+  doc.setFontSize(12.5); ry += 15;
+  doc.text("Area Sicurezza", PW/2, ry, {align:"center"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(9.3); ry += 11;
+  doc.setTextColor(10,10,10);
+  doc.text("Servizio Coordinamento Strategico Operativo", PW/2, ry, {align:"center"});
+  doc.setFont("helvetica","italic"); doc.setFontSize(8); ry += 10;
+  doc.setTextColor(71,81,101);
+  doc.text("Unità Operativa San Lorenzo · Ufficio di Polizia Amministrativa", PW/2, ry, {align:"center"});
+  ry += 6;
+  doc.setDrawColor(26,58,107); doc.setLineWidth(1); doc.line(M, ry, PW-M, ry);
+
+  ry += 13;
+  doc.setFont("helvetica","bold"); doc.setFontSize(11.5); doc.setTextColor(26,58,107);
+  doc.text("RIEPILOGO DEL RILEVAMENTO", M, ry);
+  var wr = doc.getTextWidth("RIEPILOGO DEL RILEVAMENTO");
+  doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  doc.text("· Mercato Caramanico · 557 posteggi", M + wr + 6, ry);
+
+  ry += 14;
+  doc.setFontSize(8.4); doc.setTextColor(10,10,10);
+  var rx = M;
+  rx = campoRiep(rx, "Data", dati.data, 78);
+  rx = campoRiep(rx, "Orario", dati.ora, 90);
+  rx = campoRiep(rx, "Agenti accertatori / matricole", dati.ag, 250);
+  function campoRiep(x0, et, v, w){
+    doc.setFont("helvetica","normal"); doc.setTextColor(10,10,10);
+    doc.text(et, x0, ry);
+    var lx = x0 + doc.getTextWidth(et) + 4;
+    doc.setDrawColor(150,154,160); doc.setLineWidth(0.5);
+    doc.line(lx, ry+2, lx+w, ry+2);
+    if(v){ doc.setTextColor(26,58,107); doc.text(String(v), lx+2, ry); }
+    return lx + w + 14;
+  }
+
+  /* totali */
+  ry += 16;
+  var larg = (PW - 2*M - 2*10) / 3;
+  [["PRESENTI", presenti.length, [18,49,100]],
+   ["SPUNTISTI", spuntisti.length, [90,97,112]],
+   ["LIBERI", liberi, [120,126,139]]].forEach(function(t, i){
+    var bx = M + i*(larg+10);
+    doc.setFillColor(243,244,241); doc.setDrawColor(200,203,197); doc.setLineWidth(0.6);
+    doc.rect(bx, ry, larg, 40, "FD");
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.4); doc.setTextColor(107,114,128);
+    doc.text(t[0], bx+9, ry+13);
+    doc.setFont("helvetica","bold"); doc.setFontSize(19);
+    doc.setTextColor(t[2][0], t[2][1], t[2][2]);
+    doc.text(String(t[1]), bx+9, ry+33);
+  });
+  ry += 56;
+
+  /* elenchi dei posteggi, in colonne compatte */
+  function elenco(titolo, nums, nota){
+    if(ry > PH - 60){ doc.addPage([PW, PH], "landscape"); ry = M + 14; }
+    doc.setFont("helvetica","bold"); doc.setFontSize(8.6); doc.setTextColor(26,58,107);
+    var et = titolo + " (" + nums.length + ")";
+    var wEt = doc.getTextWidth(et);   /* misurato col carattere del titolo */
+    doc.text(et, M, ry);
+    if(nota){
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.4); doc.setTextColor(107,114,128);
+      doc.text(nota, M + wEt + 8, ry);
+    }
+    ry += 5;
+    doc.setDrawColor(209,213,219); doc.setLineWidth(0.5); doc.line(M, ry, PW-M, ry);
+    ry += 12;
+    if(!nums.length){
+      doc.setFont("helvetica","italic"); doc.setFontSize(8.4); doc.setTextColor(140,145,155);
+      doc.text("nessuno", M, ry);
+      ry += 18;
+      return;
+    }
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.6); doc.setTextColor(10,10,10);
+    var perRiga = 22, passo = (PW - 2*M) / perRiga;
+    for(var i = 0; i < nums.length; i++){
+      if(i && i % perRiga === 0){
+        ry += 12;
+        if(ry > PH - 24){ doc.addPage([PW, PH], "landscape"); ry = M + 14; }
+      }
+      doc.text(String(nums[i]), M + (i % perRiga) * passo, ry);
+    }
+    ry += 20;
+  }
+  elenco("POSTEGGI PRESENTI", presenti, "contano ai fini delle presenze");
+  elenco("POSTEGGI SPUNTISTI", spuntisti, "non contano ai fini delle presenze");
+
   /* Rilevamento in forma esatta nei metadati del PDF: una lettera per
      posteggio dal n.1 al n.557 (P presente, S spuntista, L libero).
      Serve al registro dei posteggi per caricare il giro senza dover
      interpretare la planimetria. Non si vede e non si stampa. */
   var codice = "";
-  for(var n = 1; n <= 557; n++){
-    var v = stato[n];
-    codice += (v === "P" ? "P" : v === "S" ? "S" : "L");
+  for(var n2 = 1; n2 <= 557; n2++){
+    var v2 = stato[n2];
+    codice += (v2 === "P" ? "P" : v2 === "S" ? "S" : "L");
   }
   doc.setProperties({
     title: "Rilevamento presenze Mercato Caramanico",
