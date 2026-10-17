@@ -186,6 +186,9 @@ button,input,select{font:inherit; color:inherit}
 .cella[data-v="S"] .sig{fill:var(--s-ink); opacity:1}
 .cella[data-v="S"] .num{fill:var(--s-ink); opacity:.85; stroke:var(--s-bg)}
 .cella.trovata rect{stroke:var(--rosso); stroke-width:5}
+/* suggerimento: S tenue sui posteggi di norma a spuntista, finche' sono vuoti */
+.cella[data-sp]:not([data-v]) .sig{fill:var(--ink3); opacity:.42}
+.cella[data-sp]:not([data-v]) rect{stroke-dasharray:6 4}
 
 .zoom{position:absolute; right:12px; bottom:12px; display:flex; flex-direction:column; gap:6px}
 .zoom button{
@@ -613,7 +616,7 @@ window.LOGHI={"pm": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJYAAACJCAYAA
 <div class="oggetto">
   <h1>RILEVAMENTO PRESENZE</h1>
   <span class="luogo">· Mercato Caramanico</span>
-  <div class="legenda"><span><b>P</b> = presente</span><span><b>S</b> = spuntista</span><span>casella vuota = libero</span></div>
+  <div class="legenda"><span><b>P</b> = presente</span><span><b>S</b> = spuntista</span><span>casella vuota = libero</span><span style="opacity:.62"><b>S</b> tenue = di norma spuntista</span></div>
 </div>
 
 <div class="comandi">
@@ -655,7 +658,7 @@ window.LOGHI={"pm": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJYAAACJCAYAA
     <button type="button" id="zOut" aria-label="Riduci">−</button>
     <button type="button" id="zFit" aria-label="Adatta alla pagina">⤢</button>
   </div>
-  <div class="aiuto" id="aiuto">Tocca una casella: <b>vuota → P → S → vuota</b>. Trascina per spostarti, due dita per ingrandire.</div>
+  <div class="aiuto" id="aiuto">Tocca una casella: <b>vuota → P → S → vuota</b>. Dove c'è la <b>S tenue</b> è un posteggio di norma a spuntista e il primo tocco mette <b>S</b>. Trascina per spostarti, due dita per ingrandire.</div>
 </div>
 
 <div class="piede">
@@ -725,6 +728,7 @@ function costruisci(){
       var gr = document.createElementNS(NS,"g");
       gr.setAttribute("class","cella");
       gr.setAttribute("data-n", n);
+      if(SPUNTISTI[n]) gr.setAttribute("data-sp","1");
       var r = document.createElementNS(NS,"rect");
       r.setAttribute("x",x); r.setAttribute("y",y);
       r.setAttribute("width",w); r.setAttribute("height",h);
@@ -748,11 +752,19 @@ function costruisci(){
   });
 }
 
+/* Posteggi che di norma vanno a spuntista: la cella mostra una S tenue
+   finche' e' vuota, cosi' chi non conosce il mercato lo sa prima di
+   toccarla, e il primo tocco mette S invece di P. Il suggerimento non e'
+   un valore: non entra ne' nei conteggi ne' nel CSV. */
+var SPUNTISTI = {};
+[220,228,250,266,270,288,307,324,325,326,
+ 335,346,364,448,450,452,515,531,532,540].forEach(function(n){ SPUNTISTI[n] = 1; });
+
 function applica(n){
   var c = celle[n]; if(!c) return;
   var v = stato[n];
   if(v){ c.g.setAttribute("data-v", v); c.sig.textContent = v; }
-  else { c.g.removeAttribute("data-v"); c.sig.textContent = ""; }
+  else { c.g.removeAttribute("data-v"); c.sig.textContent = SPUNTISTI[n] ? "S" : ""; }
 }
 function ridisegna(){ for(var n in celle) applica(n); }
 
@@ -766,9 +778,16 @@ function conta(){
 
 function ciclo(n){
   var v = stato[n];
-  if(!v) stato[n] = "P";
-  else if(v === "P") stato[n] = "S";
-  else delete stato[n];
+  if(SPUNTISTI[n]){
+    /* dove di norma c'e' uno spuntista, il primo tocco mette S */
+    if(!v) stato[n] = "S";
+    else if(v === "S") stato[n] = "P";
+    else delete stato[n];
+  } else {
+    if(!v) stato[n] = "P";
+    else if(v === "P") stato[n] = "S";
+    else delete stato[n];
+  }
   applica(n); conta(); salva();
 }
 
@@ -940,7 +959,7 @@ function nomeFile(est){
   var d = val("fData") || new Date().toISOString().slice(0,10);
   return "presenze-caramanico-" + d + "." + est;
 }
-var AIUTO = 'Tocca una casella: <b>vuota → P → S → vuota</b>. Trascina per spostarti, due dita per ingrandire.';
+var AIUTO = 'Tocca una casella: <b>vuota → P → S → vuota</b>. Dove c\'è la <b>S tenue</b> è un posteggio di norma a spuntista e il primo tocco mette <b>S</b>. Trascina per spostarti, due dita per ingrandire.';
 function esito(msg, durata){
   var el = document.getElementById("aiuto");
   el.innerHTML = msg;
@@ -1026,7 +1045,7 @@ function costruisciPdf(){
     x = campo(x, "Orario", dati.ora, 90);
     x = campo(x, "Agenti accertatori / matricole", dati.ag, 250);
     doc.setFont("helvetica","bold"); doc.setFontSize(8.6); doc.setTextColor(26,58,107);
-    doc.text("P = presente   ·   S = spuntista", PW-M, ty, {align:"right"});
+    doc.text("P = presente   ·   S = spuntista   ·   s = di norma spuntista", PW-M, ty, {align:"right"});
     function campo(x0, et, v, w){
       doc.setFont("helvetica","normal"); doc.setTextColor(10,10,10);
       doc.text(et, x0, ty);
@@ -1082,6 +1101,13 @@ function costruisciPdf(){
         doc.setFont("helvetica","bold"); doc.setFontSize(9);
         if(t[1] === "S") doc.setTextColor(255,255,255); else doc.setTextColor(18,49,100);
         doc.text(t[1], t[3][0], t[3][1]+3, {angle:ang, align:"center"});
+        doc.setFont("helvetica","normal");
+      } else if(SPUNTISTI[t[0]]){
+        /* suggerimento sul foglio stampato: "s" minuscola e grigia, cosi'
+           chi lo rilegge non la puo' scambiare per una S rilevata */
+        doc.setFont("helvetica","bold"); doc.setFontSize(9);
+        doc.setTextColor(165,170,178);
+        doc.text("s", t[3][0], t[3][1]+3, {angle:ang, align:"center"});
         doc.setFont("helvetica","normal");
       }
     });
